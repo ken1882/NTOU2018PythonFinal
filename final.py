@@ -35,6 +35,15 @@ workers = []
 flag_data_ready = False
 page_cnt = 7
 
+keywords = {
+  '食': ['食','飲','餐','滷','飯','麵','咖啡','水','湯','乳','酒','蛋','薯','雞','茶',
+    '冰','糖','油品','餅','火鍋','菜','漿','餃'],
+  '衣': ['褲','衣','服'],
+  '行': ['汽油','石油','柴油','車'],
+  '娛樂': ['菸','網路','妝','數位','3C','書','遊戲','美容','票','玩','點數'],
+  '規費': ['費','業務','服務','租'],
+}
+
 def flatten(l, parent = []):
   for el in l:
     if el is l or el in parent:
@@ -57,6 +66,16 @@ class GUI:
     self.create_items()
     self.init_graphic()
 
+
+  def init_categoty(self):
+    self.category = {
+      '食': 0,
+      '衣': 0,
+      '行': 0,
+      '娛樂': 0,
+      '規費': 0,
+      '雜項': 0
+    }
   # Create interface
   def create_app(self):
     self.app = tk.Tk()
@@ -158,6 +177,14 @@ class GUI:
     a.set_xlabel('縣市', fontproperties=font)
     a.set_ylabel('次數', fontproperties=font)
 
+    self.init_categoty()
+    self.calc_invoice_item(self.get_date()[0], self.get_date()[1])
+    b = f.add_subplot(212)
+    b.bar(list(self.category.keys()), list(self.category.values()))
+    for label in b.get_xticklabels():
+      label.set_fontproperties(font_s)
+    b.set_xlabel('類別', fontproperties=font)
+    b.set_ylabel('次數', fontproperties=font)
     f.tight_layout()
 
     if self.widget:
@@ -170,6 +197,7 @@ class GUI:
     self.widget.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
     self.toolbar = NavigationToolbar2Tk(canvas, self.app)
     a.format_coord = self.format_coord
+    b.format_coord = self.format_coord_cat
     self.toolbar.update()
     canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
     
@@ -182,6 +210,18 @@ class GUI:
     if x_index < 0:
       return "No data selected"
     return "{}: 一千萬={} 兩百萬={}".format(self.x_a[x_index], self.y_a[x_index], self.z_a[x_index])
+
+  def format_coord_cat(self, x, y):
+    try:
+      x_index = math.floor(x + 0.5)
+    except Exception:
+      x_index = -1
+    x_index = min(x_index, len(self.category.keys()) - 1)
+    if x_index < 0:
+      return "No data selected"
+    k = list(self.category.keys())[x_index]
+    v = self.category[k]
+    return "{}: {}".format(k, v)
 
   def start(self):
     print("App started")
@@ -199,6 +239,34 @@ class GUI:
     self.start_button.config(state='disabled')
     self.update_hint(hint)
 
+  def calc_invoice_item(self, sd, ed):
+    print(sd, ed)
+    start = False
+    for data, data2 in zip(invoice_data, invoice_data2):
+      if data['timestamp'] == sd:
+        start = True
+      if start:
+        for item_name in data['goods']:
+          for cat in self.determine_category(item_name):
+            self.category[cat] += 1
+        for item_name in data2['goods']:
+          for cat in self.determine_category(item_name):
+            self.category[cat] += 1
+      if data['timestamp'] == ed:
+        start = False
+  
+  def determine_category(self, name):
+    re = []
+    for cat, words in keywords.items():
+      for w in words:
+        if w in name:
+          re.append(cat)
+          break
+    if len(re) == 0:
+      re.append('雜項') 
+    return re
+
+#end GUI class
 def get_invoice_data(sd, ed):
   print(sd, ed)
   start = False
@@ -213,12 +281,14 @@ def get_invoice_data(sd, ed):
     if start:
       for city in data['address']:
         key = city[:3]
+        key = '桃園市' if key == '桃園縣' else key
         if key not in cnt:
           cnt[key] = 1
         else:
           cnt[key] += 1
       for city in data2['address']:
         key = city[:3]
+        key = '桃園市' if key == '桃園縣' else key
         if key not in cnt2:
           cnt2[key] = 1
         else:
